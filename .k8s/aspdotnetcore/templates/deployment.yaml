@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aspdotnetcore
+spec:
+  selector:
+    matchLabels:
+      app: aspdotnetcore
+  template:
+    metadata:
+      labels:
+        app: aspdotnetcore
+        aadpodidbinding: demo
+    spec:
+      containers:
+      - name: aspdotnetcore
+        image: {registry}/demo/aspdotnetcore:{{ .Values.image.tag }}
+        resources:
+          limits:
+            memory: "128Mi"
+            cpu: "500m"
+        ports:
+        - containerPort: 80

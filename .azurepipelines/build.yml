@@ -1,0 +1,64 @@
+# Starter pipeline
+# Start with a minimal pipeline that you can customize to build and deploy your code.
+# Add steps that build, run tests, deploy, and more:
+# https://aka.ms/yaml
+
+trigger:
+- main
+
+pool:
+  vmImage: ubuntu-latest
+
+stages:
+- stage: build
+  displayName: Build
+  jobs:
+    - job: build
+      displayName: Build Container Image
+      steps:
+        - task: Docker@2
+          inputs:
+            containerRegistry: 'ACR-locicatwork'
+            repository: 'demo/aspdotnetcore'
+            command: 'buildAndPush'
+            Dockerfile: '**/Dockerfile'
+        - task: PublishBuildArtifacts@1
+          displayName: Publish k8s manifests
+          inputs:
+            PathtoPublish: '$(Build.SourcesDirectory)/.k8s/'
+            ArtifactName: 'manifests'
+            publishLocation: 'Container'
+
+- stage: devdeploy
+  displayName: Deploy to DEV
+  jobs:
+    - job: downloadManifests
+      displayName: Download .k8s manifests
+      steps:
+        - task: DownloadPipelineArtifact@2
+          inputs:
+            buildType: 'current'
+            artifactName: 'manifests'
+            targetPath: '$(Pipeline.Workspace)'
+
+    - deployment: deploytodev
+      displayName: Deploy to DEV
+      environment: akspodid-dev
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - task: HelmDeploy@0
+                inputs:
+                  connectionType: 'Azure Resource Manager'
+                  azureSubscription: 'AppServiceAzDO-SP-Manual'
+                  azureResourceGroup: 'rg-akspodid'
+                  kubernetesCluster: 'akspodid'
+                  useClusterAdmin: true
+                  namespace: 'dev'
+                  command: 'upgrade'
+                  chartType: 'FilePath'
+                  chartPath: '.k8s/aspdotnetcore'
+                  releaseName: 'aspdotnetcore'
+                  overrideValues: 'image.tag=$(Build.BuildId)'
+                  valueFile: '.k8s/aspdotnetcore/values.yaml'
